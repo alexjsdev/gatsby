@@ -1,8 +1,8 @@
 const { graphql } = require(`graphql`)
 const { store } = require(`../../redux`)
+const { actions } = require(`../../redux/actions`)
 const { build } = require(`..`)
 const withResolverContext = require(`../context`)
-const { trackInlineObjectsInRootNode } = require(`../../db/node-tracking`)
 require(`../../db/__tests__/fixtures/ensure-loki`)()
 const path = require(`path`)
 const slash = require(`slash`)
@@ -48,11 +48,36 @@ const nodes = [
     absolutePath: filePath(`test.txt`),
   },
   {
+    id: `file4`,
+    parent: `file5`,
+    children: [`test2`],
+    internal: {
+      type: `File`,
+      contentDigest: `file4`,
+    },
+    name: `parent.txt`,
+    dir: basePath,
+    absolutePath: filePath(`parent.txt`),
+  },
+  {
+    id: `file5`,
+    parent: null,
+    children: [`file4`],
+    internal: {
+      type: `File`,
+      contentDigest: `file5`,
+    },
+    name: `root.txt`,
+    dir: `/`,
+    absolutePath: `/root.txt`,
+  },
+  {
     id: `test1`,
     parent: `file3`,
     children: [],
     internal: {
       type: `Test`,
+      contentDigest: `filenested`,
     },
     file: `./1.png`,
     files: [`./1.png`, `./2.png`],
@@ -70,27 +95,45 @@ const nodes = [
         files: [`./2.png`],
       },
     ],
+    arrayOfArray: [[`./1.png`], [`./2.png`]],
+    arrayOfArrayOfObjects: [[{ nested: `./1.png` }], [{ nested: `./2.png` }]],
+  },
+  {
+    id: `test2`,
+    parent: `file4`,
+    children: [],
+    internal: {
+      type: `TestChild`,
+      contentDigest: `test2`,
+    },
+    file: `./1.png`,
   },
 ]
 
 describe(`Query fields of type File`, () => {
   let schema
+  let schemaComposer
 
   const runQuery = query =>
-    graphql(schema, query, undefined, withResolverContext({}, schema))
+    graphql(
+      schema,
+      query,
+      undefined,
+      withResolverContext({
+        schema,
+        schemaComposer,
+      })
+    )
 
   beforeAll(async () => {
     store.dispatch({ type: `DELETE_CACHE` })
     nodes.forEach(node => {
-      // FIXME: We should be testing with action creators, not dispatching actions directly.
-      // Because we're not we have to manually ensure that node objects are being tracked,
-      // which is otherwise taken care of in the action creator.
-      store.dispatch({ type: `CREATE_NODE`, payload: node })
-      trackInlineObjectsInRootNode(node)
+      actions.createNode(node, { name: `test` })(store.dispatch)
     })
 
     await build({})
     schema = store.getState().schema
+    schemaComposer = store.getState().schemaCustomization.composer
   })
 
   it(`finds File nodes`, async () => {
@@ -106,6 +149,12 @@ describe(`Query fields of type File`, () => {
           array {
             file { name }
             files { name }
+          }
+          arrayOfArray { name }
+          arrayOfArrayOfObjects {
+            nested {
+              name
+            }
           }
         }
       }
@@ -128,6 +177,11 @@ describe(`Query fields of type File`, () => {
             file: { name: `2.png` },
             files: [{ name: `2.png` }],
           },
+        ],
+        arrayOfArray: [[{ name: `1.png` }], [{ name: `2.png` }]],
+        arrayOfArrayOfObjects: [
+          [{ nested: { name: `1.png` } }],
+          [{ nested: { name: `2.png` } }],
         ],
       },
     }
@@ -184,6 +238,24 @@ describe(`Query fields of type File`, () => {
             files: [{ name: `2.png` }],
           },
         ],
+      },
+    }
+    expect(results.errors).toBeUndefined()
+    expect(results.data).toEqual(expected)
+  })
+
+  it(`uses nearest File node ancestor to resolve relative paths`, async () => {
+    const query = `
+      {
+        testChild {
+          file { name }
+        }
+      }
+    `
+    const results = await runQuery(query)
+    const expected = {
+      testChild: {
+        file: { name: `1.png` },
       },
     }
     expect(results.errors).toBeUndefined()

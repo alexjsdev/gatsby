@@ -24,7 +24,7 @@ module.exports = (state = new Map(), action) => {
         const machine = componentMachine.withContext({
           componentPath: action.payload.componentPath,
           query: state.get(action.payload.componentPath)?.query || ``,
-          pages: [action.payload.path],
+          pages: new Set([action.payload.path]),
           isInBootstrap: programStatus === `BOOTSTRAPPING`,
         })
         service = interpret(machine).start()
@@ -38,8 +38,13 @@ module.exports = (state = new Map(), action) => {
         services.set(action.payload.componentPath, service)
       } else {
         service = services.get(action.payload.componentPath)
-        if (!service.state.context.pages.includes(action.payload.path)) {
+        if (!service.state.context.pages.has(action.payload.path)) {
           service.send({ type: `NEW_PAGE_CREATED`, path: action.payload.path })
+        } else if (action.contextModified) {
+          service.send({
+            type: `PAGE_CONTEXT_MODIFIED`,
+            path: action.payload.path,
+          })
         }
       }
 
@@ -81,14 +86,27 @@ module.exports = (state = new Map(), action) => {
     case `QUERY_EXTRACTION_BABEL_SUCCESS`:
     case `QUERY_EXTRACTION_BABEL_ERROR`:
     case `QUERY_EXTRACTION_GRAPHQL_ERROR`: {
-      action.payload.componentPath = normalize(action.payload.componentPath)
-      const service = services.get(action.payload.componentPath)
-      if (service) {
+      let servicesToSendEventTo
+      if (
+        typeof action.payload.componentPath !== `string` &&
+        action.type === `QUERY_EXTRACTION_GRAPHQL_ERROR`
+      ) {
+        // if this is globabl query extraction error, send it to all page component services
+        servicesToSendEventTo = services
+      } else {
+        action.payload.componentPath = normalize(action.payload.componentPath)
+        servicesToSendEventTo = [
+          services.get(action.payload.componentPath),
+        ].filter(Boolean)
+      }
+
+      servicesToSendEventTo.forEach(service =>
         service.send({
           type: action.type,
           ...action.payload,
         })
-      }
+      )
+
       return state
     }
     case `PAGE_QUERY_RUN`: {

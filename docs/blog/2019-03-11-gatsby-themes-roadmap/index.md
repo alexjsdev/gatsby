@@ -3,7 +3,7 @@ title: Gatsby Themes Roadmap
 date: 2019-03-11
 author: Chris Biscardi
 excerpt: "Where Gatsby themes are headed in 2019"
-tags: ["themes", "architecture"]
+tags: ["themes", "content-mesh"]
 ---
 
 Gatsby themes have come a long way in the last few months. We've iteratively
@@ -35,17 +35,16 @@ plugin itself, resulting in `[...themeA.plugins, themeA, ...themeB.plugins, them
 any plugin it includes.
 
 For more on this, read [Introducing Gatsby
-Themes](https://www.gatsbyjs.org/blog/2018-11-11-introducing-gatsby-themes/).
+Themes](/blog/2018-11-11-introducing-gatsby-themes/).
 
 We introduced one major change to composition after the initial release to
 support child themes. A child theme is a theme that also uses the
-`__experimentalThemes` `gatsby-config` key. This change brought the full power
-of `gatsby-config` to theming as `__experimentalThemes` was until this change
-the only key not allowed in a theme.
+`plugins` `gatsby-config` key – a change that brought the full power
+of `gatsby-config` to theming.
 
 ```js:title="a child theme's gatsby-config.js"
 module.exports = {
-  __experimentalThemes: [`gatsby-theme-blog-core`],
+  plugins: [`gatsby-theme-blog-core`],
 }
 ```
 
@@ -102,7 +101,7 @@ In fact, any file that is processed by webpack can be shadowed.
 
 To learn more about child themes and component shadowing, [read this themes
 update blog
-post](https://www.gatsbyjs.org/blog/2019-01-29-themes-update-child-theming-and-component-shadowing/).
+post](/blog/2019-01-29-themes-update-child-theming-and-component-shadowing/).
 
 ## Improving Documentation
 
@@ -142,7 +141,7 @@ core community `BlogPost` type with multi-author support. It would be
 immediately compatible with any theme that used the `BlogPost` type.
 
 If you're following closely you may have already seen [a blog post by Mikhail
-Novikov](https://www.gatsbyjs.org/blog/2019-03-04-new-schema-customization/) on
+Novikov](/blog/2019-03-04-new-schema-customization/) on
 the new schema customization APIs: `createTypes` and `createResolvers`. These
 are the primitives we are using to build data abstractions to use with themes.
 We're still experimenting and doing research here so I won't show any code

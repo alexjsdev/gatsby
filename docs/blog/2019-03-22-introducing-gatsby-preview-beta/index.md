@@ -2,16 +2,16 @@
 title: Introducing Gatsby Preview Beta
 date: 2019-03-22
 author: Marisa Morby
-excerpt: "Introducing the Gatsby Preview Beta: learn more and sign up today for early access to our first commerical product."
+excerpt: "Introducing the Gatsby Preview Beta: learn more and sign up today for early access to our first commercial product."
 tags:
-  - preview
-  - cloud
-  - commercial
+  - gatsby-preview
+  - gatsby-cloud
+  - gatsby-inc
 ---
 
 ## What we’ve been up to
 
-Back in July we announced [our alpha release of Gatsby Preview](https://www.gatsbyjs.org/blog/2018-07-17-announcing-gatsby-preview/). The team has been hard at work since getting your feedback and incorporating it into Gatsby Preview product.
+Back in July we announced [our alpha release of Gatsby Preview](/blog/2018-07-17-announcing-gatsby-preview/). The team has been hard at work since getting your feedback and incorporating it into Gatsby Preview product.
 
 We’re excited to announce Gatsby Preview is now in beta! To the many people that have signed up to try Preview, we'll be inviting more and more of you over the coming weeks. Gatsby Preview will continue to be invite-only until we've worked with enough customers that we're confident of the usability, reliability, and scalability of our platform.
 
@@ -52,6 +52,10 @@ See how you can troubleshoot and add or remove contributors:
 ## How to sign up
 
 We’re currently running a closed beta for Gatsby Preview. [Sign up here](https://www.gatsbyjs.com/preview/) to get added to the waitlist.
+
+## Gatsby Preview Docs
+
+Once you've been invited to Gatsby Preview, you can view the documentation for integrating Preview with the CMS platforms that are supported on [GatsbyJS.com](https://www.gatsbyjs.com/docs/).
 
 ## What’s coming next
 

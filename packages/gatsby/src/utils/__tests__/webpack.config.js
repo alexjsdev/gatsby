@@ -18,6 +18,22 @@ const { readFileSync } = require(`fs-extra`)
 const webpackConfig = require(`../webpack.config`)
 const { store } = require(`../../redux`)
 
+jest.mock(`gatsby-cli/lib/reporter`, () => {
+  return {
+    log: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    activityTimer: () => {
+      return {
+        start: jest.fn(),
+        setStatus: jest.fn(),
+        end: jest.fn(),
+      }
+    },
+  }
+})
+
 beforeEach(() => {
   DefinePlugin.mockClear()
   readFileSync.mockClear()
@@ -55,7 +71,7 @@ describe(`basic functionality`, () => {
         )
       )
     )
-  })
+  }, 30000)
 })
 
 describe(`environment variables`, () => {
@@ -101,6 +117,10 @@ describe(`environment variables`, () => {
         expect.stringContaining(`.env.staging`),
         expect.anything()
       )
+      expect(DefinePlugin).toBeCalledTimes(1)
+      expect(DefinePlugin.mock.calls[0][0]).toMatchObject({
+        [`process.env.NODE_ENV`]: JSON.stringify(process.env.NODE_ENV),
+      })
     })
 
     it(`falls back to NODE_ENV`, async () => {

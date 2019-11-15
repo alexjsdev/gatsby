@@ -1,3 +1,4 @@
+const path = require(`path`)
 require(`dotenv`).config({
   path: `.env.${process.env.NODE_ENV}`,
 })
@@ -11,19 +12,42 @@ const dynamicPlugins = []
 if (process.env.ANALYTICS_SERVICE_ACCOUNT) {
   // pick data from 3 months ago
   const startDate = new Date()
-  startDate.setMonth(startDate.getMonth() - 3)
+  // temporary lower guess to use 2 days of data to lower guess data
+  // real fix is to move gatsby-plugin-guess to aot mode
+  // startDate.setMonth(startDate.getMonth() - 3)
+  startDate.setDate(startDate.getDate() - 2)
   dynamicPlugins.push({
     resolve: `gatsby-plugin-guess-js`,
     options: {
       GAViewID: GA.viewId,
       jwt: {
         client_email: process.env.ANALYTICS_SERVICE_ACCOUNT,
-        private_key: process.env.ANALYTICS_SERVICE_ACCOUNT_KEY,
+        // replace \n characters in real new lines for circleci deploys
+        private_key: process.env.ANALYTICS_SERVICE_ACCOUNT_KEY.replace(
+          /\\n/g,
+          `\n`
+        ),
       },
       period: {
         startDate,
         endDate: new Date(),
       },
+    },
+  })
+}
+
+if (process.env.AIRTABLE_API_KEY) {
+  dynamicPlugins.push({
+    resolve: `gatsby-source-airtable`,
+    options: {
+      apiKey: process.env.AIRTABLE_API_KEY,
+      tables: [
+        {
+          baseId: `app0q5U0xkEwZaT9c`,
+          tableName: `Community Events Submitted`,
+          queryName: `CommunityEvents`,
+        },
+      ],
     },
   })
 }
@@ -37,8 +61,10 @@ module.exports = {
   },
   mapping: {
     "MarkdownRemark.frontmatter.author": `AuthorYaml`,
+    "Mdx.frontmatter.author": `AuthorYaml`,
   },
   plugins: [
+    `gatsby-plugin-theme-ui`,
     {
       resolve: `gatsby-source-npm-package-search`,
       options: {
@@ -68,6 +94,14 @@ module.exports = {
       },
     },
     {
+      resolve: `gatsby-source-filesystem`,
+      options: {
+        name: `guidelines`,
+        path: `${__dirname}/src/data/guidelines/`,
+      },
+    },
+    `gatsby-transformer-gatsby-api-calls`,
+    {
       resolve: `gatsby-plugin-typography`,
       options: {
         pathToConfigModule: `src/utils/typography`,
@@ -79,6 +113,45 @@ module.exports = {
       resolve: `gatsby-source-filesystem`,
       options: {
         path: `${__dirname}/src/data/diagram`,
+      },
+    },
+    {
+      resolve: `gatsby-source-filesystem`,
+      options: {
+        path: `${__dirname}/src/assets`,
+      },
+    },
+    {
+      resolve: `gatsby-plugin-mdx`,
+      options: {
+        extensions: [`.md`, `.mdx`],
+        shouldBlockNodeFromTransformation(node) {
+          return (
+            [`NPMPackage`, `NPMPackageReadme`].includes(node.internal.type) ||
+            (node.internal.type === `File` &&
+              path.parse(node.dir).dir.endsWith(`packages`))
+          )
+        },
+        gatsbyRemarkPlugins: [
+          `gatsby-remark-graphviz`,
+          `gatsby-remark-embed-video`,
+          {
+            resolve: `gatsby-remark-images`,
+            options: {
+              maxWidth: 786,
+              backgroundColor: `#ffffff`,
+            },
+          },
+          {
+            resolve: `gatsby-remark-responsive-iframe`,
+            options: {
+              wrapperStyle: `margin-bottom: 1.5rem`,
+            },
+          },
+          `gatsby-remark-autolink-headers`,
+          `gatsby-remark-copy-linked-files`,
+          `gatsby-remark-smartypants`,
+        ],
       },
     },
     {
@@ -102,7 +175,23 @@ module.exports = {
             },
           },
           `gatsby-remark-autolink-headers`,
-          `gatsby-remark-prismjs`,
+          {
+            resolve: `gatsby-remark-prismjs`,
+            options: {
+              aliases: {
+                dosini: `ini`,
+                env: `bash`,
+                es6: `js`,
+                flowchart: `none`,
+                gitignore: `none`,
+                gql: `graphql`,
+                htaccess: `apacheconf`,
+                mdx: `markdown`,
+                ml: `fsharp`,
+                styl: `stylus`,
+              },
+            },
+          },
           `gatsby-remark-copy-linked-files`,
           `gatsby-remark-smartypants`,
         ],
@@ -120,7 +209,6 @@ module.exports = {
     `gatsby-plugin-sharp`,
     `gatsby-plugin-catch-links`,
     `gatsby-plugin-layout`,
-    `gatsby-plugin-lodash`,
     {
       resolve: `gatsby-plugin-manifest`,
       options: {
@@ -134,6 +222,12 @@ module.exports = {
       },
     },
     `gatsby-plugin-offline`,
+    {
+      resolve: `gatsby-plugin-perf-metrics`,
+      options: {
+        appId: `1:216044356421:web:92185d5e24b3a2a1`,
+      },
+    },
     `gatsby-transformer-csv`,
     `gatsby-plugin-twitter`,
     `gatsby-plugin-react-helmet`,
@@ -143,6 +237,7 @@ module.exports = {
       options: {
         trackingId: GA.identifier,
         anonymize: true,
+        allowLinker: true,
       },
     },
     {
@@ -150,10 +245,12 @@ module.exports = {
       options: {
         feeds: [
           {
+            title: `GatsbyJS`,
             query: `
               {
-                allMarkdownRemark(
+                allMdx(
                   sort: { order: DESC, fields: [frontmatter___date] }
+                  limit: 10,
                   filter: {
                     frontmatter: { draft: { ne: true } }
                     fileAbsolutePath: { regex: "/docs.blog/" }
@@ -193,8 +290,8 @@ module.exports = {
                 generator: `GatsbyJS`,
               }
             },
-            serialize: ({ query: { site, allMarkdownRemark } }) =>
-              allMarkdownRemark.edges.map(({ node }) => {
+            serialize: ({ query: { site, allMdx } }) =>
+              allMdx.edges.map(({ node }) => {
                 return {
                   title: node.frontmatter.title,
                   description: node.frontmatter.excerpt || node.excerpt,
@@ -208,7 +305,14 @@ module.exports = {
         ],
       },
     },
-    `gatsby-plugin-netlify`,
+    {
+      resolve: `gatsby-plugin-netlify`,
+      options: {
+        headers: {
+          "/*": [`Referrer-Policy: strict-origin-when-cross-origin`],
+        },
+      },
+    },
     `gatsby-plugin-netlify-cache`,
     {
       resolve: `gatsby-plugin-mailchimp`,
@@ -222,6 +326,6 @@ module.exports = {
         nodeTypes: [`StartersYaml`],
       },
     },
-    `gatsby-plugin-subfont`,
+    // `gatsby-plugin-subfont`,
   ].concat(dynamicPlugins),
 }

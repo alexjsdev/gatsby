@@ -5,9 +5,9 @@ The main Gatsby site at gatsbyjs.org
 Run locally with:
 
 - `yarn install`
-- `npm run develop`
+- `gatsby develop`
 
-See the full contributing instructions at https://www.gatsbyjs.org/contributing/how-to-contribute/.
+See the full contributing instructions at https://www.gatsbyjs.org/contributing/how-to-contribute/
 
 ## Environment variables
 
@@ -27,19 +27,6 @@ To develop on the starter library, you'll need to supply a GitHub personal acces
 GITHUB_API_TOKEN=YOUR_TOKEN_HERE
 ```
 
-### Working with feedback widgets
-
-Several areas of the site include feedback widgets (currently starter library and plugin library). These aren't configured to work in development, unless you have set the public keys (as environment variables) for each widget.
-
-If you have access to the keys, add them like so:
-
-```
-GATSBY_FEEDBACK_KEY_PLUGINLIB=ADD_KEY
-GATSBY_FEEDBACK_KEY_STARTERLIB=ADD_KEY
-```
-
-If there's a problem with the feedback widgets, please open an issue in the repo.
-
 ### Enabling guess.js
 
 Guess.js is disabled by default and can be enabled by setting `ANALYTICS_SERVICE_ACCOUNT` and `ANALYTICS_SERVICE_ACCOUNT_KEY` env variables. These variables need to have access to the gatsbyjs.org analytics.
@@ -53,7 +40,7 @@ ANALYTICS_SERVICE_ACCOUNT_KEY="PEM KEY VALUE"
 
 ## Running slow build? (Screenshots placeholder)
 
-If you are not working on starter or site showcase, it might be beneficial to use a placeholder image instead of actual screenshots. It will skip downloading screenshots and generating responsive images for all screenshots and replace them with a placeholder image.
+If you are not working on a starter or site showcase, it might be beneficial to use a placeholder image instead of actual screenshots. It will skip downloading screenshots and generating responsive images for all screenshots and replace them with a placeholder image.
 
 Add the following env variable to your `.env.development` file to enable placeholder behaviour:
 
@@ -62,3 +49,14 @@ GATSBY_SCREENSHOT_PLACEHOLDER=true
 ```
 
 For more information checkout [`gatsby-transformer-screenshot` docs](http://www.gatsbyjs.org/packages/gatsby-transformer-screenshot#placeholder-image).
+
+## `theme-ui`, CSS authoring, and dark mode
+
+Since [#18027](https://github.com/gatsbyjs/gatsby/pull/18027), we are using [`theme-ui`](https://theme-ui.com/) (via [`gatsby-plugin-theme-ui`](https://www.gatsbyjs.org/packages/gatsby-plugin-theme-ui/?=gatsby-plugin-theme)) to handle theming, CSS authoring, and to provide a dark color mode.
+
+- Please use the [`sx` prop](https://theme-ui.com/sx-prop) and theme values to style elements and components wherever possible. The prop is "enabled" by adding `theme-ui`'s [JSX pragma](https://theme-ui.com/jsx-pragma).
+- It is still okay to directly import tokens, e.g. `mediaQueries` or `colors` directly from `www/src/gatsby-plugin-theme-ui` if it helps your specific use case — for example when global CSS is required, when passing theme values to other libraries or plugins, when authoring complex responsive styles, etc.
+- It also is perfectly fine to follow the [`theme-ui` approach for responsive styles](https://theme-ui.com/getting-started/#responsive-styles)!
+- If you need to add fields to the [theme](https://theme-ui.com/theme-spec), you can do so in (the work-in-progress) `www/src/gatsby-plugin-theme-ui`. As things settle down, we will eventually migrate changed and added role-based tokens to https://www.npmjs.com/package/gatsby-design-tokens.
+- Please keep the dark mode in mind when editing existing or adding new components.
+- Please bear with us while we adjust https://www.gatsbyjs.org/guidelines/design-tokens/ to document the `theme-ui` values next to the raw token values.

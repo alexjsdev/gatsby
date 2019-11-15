@@ -1,18 +1,12 @@
+/** @jsx jsx */
+import { jsx } from "theme-ui"
 import React, { Component } from "react"
 
 import Item from "./item"
 import ExpandAllButton from "./button-expand-all"
 import getActiveItem from "../../utils/sidebar/get-active-item"
 import getActiveItemParents from "../../utils/sidebar/get-active-item-parents"
-import {
-  colors,
-  space,
-  scale,
-  transition,
-  breakpoints,
-  dimensions,
-} from "../../utils/presets"
-import presets from "../../utils/sidebar/presets"
+import { mediaQueries } from "../../gatsby-plugin-theme-ui"
 
 // Access to global `localStorage` property must be guarded as it
 // fails under iOS private session mode.
@@ -64,7 +58,7 @@ class SidebarBody extends Component {
     const node = this.scrollRef.current
 
     if (hasLocalStorage) {
-      const key = this.props.itemList[0].key
+      const key = this.props.sidebarKey
       const initialState = this.state
       const localState = this._readLocalStorage(key)
 
@@ -114,7 +108,7 @@ class SidebarBody extends Component {
           props.itemList,
           activeItemLink,
           []
-        ),
+        ).map(link => link.title),
         activeItemHash: props.activeItemHash,
       }
     }
@@ -132,14 +126,14 @@ class SidebarBody extends Component {
     const state = {
       openSectionHash: {},
       expandAll: false,
-      key: props.itemList[0].key,
+      key: props.sidebarKey,
       activeItemHash: props.activeItemHash,
       activeItemLink: activeItemLink,
       activeItemParents: getActiveItemParents(
         props.itemList,
         activeItemLink,
         []
-      ),
+      ).map(link => link.title),
     }
 
     getOpenItemHash(props.itemList, state)
@@ -207,10 +201,22 @@ class SidebarBody extends Component {
         aria-label="Secondary Navigation"
         id="SecondaryNavigation"
         className="docSearch-sidebar"
-        css={{ height: `100%` }}
+        sx={{ height: `100%` }}
       >
-        {!itemList[0].disableExpandAll && (
-          <header css={{ ...styles.utils }}>
+        {!this.props.disableExpandAll && (
+          <header
+            sx={{
+              alignItems: `center`,
+              bg: `background`,
+              borderColor: `ui.border`,
+              borderRightStyle: `solid`,
+              borderRightWidth: `1px`,
+              display: `flex`,
+              height: `sidebarUtilityHeight`,
+              pl: 4,
+              pr: 6,
+            }}
+          >
             <ExpandAllButton
               onClick={this._expandAll}
               expandAll={this.state.expandAll}
@@ -229,22 +235,63 @@ class SidebarBody extends Component {
             })
           }}
           ref={this.scrollRef}
-          css={{
-            ...styles.sidebarScrollContainer,
-            height: itemList[0].disableExpandAll
-              ? `100%`
-              : `calc(100% - ${dimensions.sidebarUtilityHeight})`,
-            [breakpoints.md]: {
-              ...styles.sidebarScrollContainerTablet,
+          sx={{
+            WebkitOverflowScrolling: `touch`,
+            bg: `background`,
+            border: 0,
+            display: `block`,
+            overflowY: `auto`,
+            transition: t =>
+              `opacity ${t.transition.speed.slow} ${t.transition.curve.default}`,
+            zIndex: 10,
+            borderRightWidth: `1px`,
+            borderRightStyle: `solid`,
+            borderColor: `ui.border`,
+            height: t =>
+              this.props.disableExpandAll
+                ? `100%`
+                : `calc(100% - ${t.sizes.sidebarUtilityHeight})`,
+            [mediaQueries.md]: {
+              top: t =>
+                `calc(${t.sizes.headerHeight} + ${t.sizes.bannerHeight})`,
             },
           }}
         >
-          <ul css={{ ...styles.list }}>
+          <h3
+            sx={{
+              color: `textMuted`,
+              px: 6,
+              fontSize: 1,
+              pt: 6,
+              margin: 0,
+              fontWeight: `body`,
+              textTransform: `uppercase`,
+              letterSpacing: `tracked`,
+            }}
+          >
+            {this.props.title}
+          </h3>
+          <ul
+            sx={{
+              m: 0,
+              py: 4,
+              fontSize: 1,
+              bg: `background`,
+              "& li": {
+                m: 0,
+                listStyle: `none`,
+              },
+              "& > li:last-child > span:before": {
+                display: `none`,
+              },
+            }}
+          >
             {itemList.map((item, index) => (
               <Item
                 activeItemLink={activeItemLink}
                 activeItemParents={activeItemParents}
-                isActive={openSectionHash[item.title]}
+                isActive={item.link === location.pathname}
+                isExpanded={openSectionHash[item.title]}
                 item={item}
                 key={index}
                 location={location}
@@ -252,6 +299,7 @@ class SidebarBody extends Component {
                 onSectionTitleClick={this._toggleSection}
                 openSectionHash={openSectionHash}
                 isSingle={isSingle}
+                disableAccordions={this.props.disableAccordions}
               />
             ))}
           </ul>
@@ -262,42 +310,3 @@ class SidebarBody extends Component {
 }
 
 export default SidebarBody
-
-const styles = {
-  utils: {
-    borderRight: `1px solid ${colors.gray.border}`,
-    display: `flex`,
-    alignItems: `center`,
-    height: dimensions.sidebarUtilityHeight,
-    background: presets.backgroundDefault,
-    paddingLeft: space[4],
-    paddingRight: 8,
-  },
-  sidebarScrollContainer: {
-    WebkitOverflowScrolling: `touch`,
-    background: presets.backgroundDefault,
-    border: 0,
-    display: `block`,
-    overflowY: `auto`,
-    transition: `opacity ${transition.speed.slow} ${transition.curve.default}`,
-    zIndex: 10,
-    borderRight: `1px solid ${colors.gray.border}`,
-  },
-  sidebarScrollContainerTablet: {
-    backgroundColor: presets.backgroundTablet,
-    top: `calc(${dimensions.headerHeight} + ${dimensions.bannerHeight})`,
-  },
-  list: {
-    margin: 0,
-    paddingTop: space[4],
-    paddingBottom: space[4],
-    fontSize: scale[1],
-    "& li": {
-      margin: 0,
-      listStyle: `none`,
-    },
-    "& > li:last-child > span:before": {
-      display: `none`,
-    },
-  },
-}

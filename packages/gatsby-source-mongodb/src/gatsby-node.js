@@ -1,11 +1,11 @@
 const MongoClient = require(`mongodb`).MongoClient
-const crypto = require(`crypto`)
 const prepareMappingChildNode = require(`./mapping`)
 const sanitizeName = require(`./sanitize-name`)
 const queryString = require(`query-string`)
+const stringifyObjectIds = require(`./stringify-object-ids`)
 
 exports.sourceNodes = (
-  { actions, getNode, createNodeId, hasNodeChanged },
+  { actions, getNode, createNodeId, hasNodeChanged, createContentDigest },
   pluginOptions
 ) => {
   const { createNode } = actions
@@ -25,9 +25,7 @@ exports.sourceNodes = (
   const clientOptions = pluginOptions.clientOptions || { useNewUrlParser: true }
   const connectionURL = pluginOptions.connectionString
     ? `${pluginOptions.connectionString}/${dbName}${connectionExtraParams}`
-    : `mongodb://${authUrlPart}${serverOptions.address}:${
-        serverOptions.port
-      }/${dbName}${connectionExtraParams}`
+    : `mongodb://${authUrlPart}${serverOptions.address}:${serverOptions.port}/${dbName}${connectionExtraParams}`
   const mongoClient = new MongoClient(connectionURL, clientOptions)
   return mongoClient
     .connect()
@@ -40,7 +38,15 @@ exports.sourceNodes = (
 
       return Promise.all(
         collection.map(col =>
-          createNodes(db, pluginOptions, dbName, createNode, createNodeId, col)
+          createNodes(
+            db,
+            pluginOptions,
+            dbName,
+            createNode,
+            createNodeId,
+            col,
+            createContentDigest
+          )
         )
       )
         .then(() => {
@@ -58,14 +64,20 @@ exports.sourceNodes = (
     })
 }
 
+function idToString(id) {
+  return id.hasOwnProperty(`toHexString`) ? id.toHexString() : String(id)
+}
+
 function createNodes(
   db,
   pluginOptions,
   dbName,
   createNode,
   createNodeId,
-  collectionName
+  collectionName,
+  createContentDigest
 ) {
+  const { preserveObjectIds = false } = pluginOptions
   return new Promise((resolve, reject) => {
     let collection = db.collection(collectionName)
     let cursor = collection.find()
@@ -76,11 +88,17 @@ function createNodes(
         reject(err)
       }
 
-      documents.forEach(item => {
-        var id = item._id.toString()
-        delete item._id
+      documents.forEach(({ _id, ...item }) => {
+        const id = idToString(_id)
 
-        var node = {
+        // only call recursive function to preserve relations represented by objectids if pluginoption set.
+        if (preserveObjectIds) {
+          for (let key in item) {
+            item[key] = stringifyObjectIds(item[key])
+          }
+        }
+
+        const node = {
           // Data for the node.
           ...item,
           id: createNodeId(`${id}`),
@@ -92,10 +110,7 @@ function createNodes(
               collectionName
             )}`,
             content: JSON.stringify(item),
-            contentDigest: crypto
-              .createHash(`md5`)
-              .update(JSON.stringify(item))
-              .digest(`hex`),
+            contentDigest: createContentDigest(item),
           },
         }
         const childrenNodes = []
@@ -116,7 +131,7 @@ function createNodes(
                 mediaItemFieldKey,
                 node[mediaItemFieldKey],
                 mapObj[mediaItemFieldKey],
-                createNode
+                createContentDigest
               )
 
               node[`${mediaItemFieldKey}___NODE`] = mappingChildNode.id

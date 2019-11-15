@@ -1,22 +1,24 @@
 const Promise = require(`bluebird`)
-const glob = require(`glob`)
 const _ = require(`lodash`)
 const chalk = require(`chalk`)
+const { bindActionCreators } = require(`redux`)
 
 const tracer = require(`opentracing`).globalTracer()
 const reporter = require(`gatsby-cli/lib/reporter`)
 const getCache = require(`./get-cache`)
-const apiList = require(`./api-node-docs`)
 const createNodeId = require(`./create-node-id`)
-const createContentDigest = require(`./create-content-digest`)
+const { createContentDigest } = require(`gatsby-core-utils`)
 const {
   buildObjectType,
   buildUnionType,
   buildInterfaceType,
   buildInputObjectType,
+  buildEnumType,
+  buildScalarType,
 } = require(`../schema/types/type-builders`)
-const { emitter } = require(`../redux`)
-const { getNonGatsbyCodeFrame } = require(`./stack-trace-utils`)
+const { emitter, store } = require(`../redux`)
+const getPublicPath = require(`./get-public-path`)
+const { getNonGatsbyCodeFrameFormatted } = require(`./stack-trace-utils`)
 const { trackBuildError, decorateEvent } = require(`gatsby-telemetry`)
 
 // Bind action creators per plugin so we can auto-add
@@ -37,10 +39,11 @@ const doubleBind = (boundActionCreators, api, plugin, actionOptions) => {
           // Let action callers override who the plugin is. Shouldn't be
           // used that often.
           if (args.length === 1) {
-            boundActionCreator(args[0], plugin, actionOptions)
+            return boundActionCreator(args[0], plugin, actionOptions)
           } else if (args.length === 2) {
-            boundActionCreator(args[0], args[1], actionOptions)
+            return boundActionCreator(args[0], args[1], actionOptions)
           }
+          return undefined
         }
       }
     }
@@ -65,7 +68,12 @@ const initAPICallTracing = parentSpan => {
   }
 }
 
-const runAPI = (plugin, api, args) => {
+const getLocalReporter = (activity, reporter) =>
+  activity
+    ? { ...reporter, panicOnBuild: activity.panicOnBuild.bind(activity) }
+    : reporter
+
+const runAPI = (plugin, api, args, activity) => {
   const gatsbyNode = require(`${plugin.resolve}/gatsby-node`)
   if (gatsbyNode[api]) {
     const parentSpan = args && args.parentSpan
@@ -75,8 +83,6 @@ const runAPI = (plugin, api, args) => {
     pluginSpan.setTag(`api`, api)
     pluginSpan.setTag(`plugin`, plugin.name)
 
-    let pathPrefix = ``
-    const { store, emitter } = require(`../redux`)
     const {
       loadNodeContent,
       getNodes,
@@ -85,18 +91,29 @@ const runAPI = (plugin, api, args) => {
       hasNodeChanged,
       getNodeAndSavePathDependency,
     } = require(`../db/nodes`)
-    const { boundActionCreators } = require(`../redux/actions`)
-
+    const {
+      publicActions,
+      restrictedActionsAvailableInAPI,
+    } = require(`../redux/actions`)
+    const availableActions = {
+      ...publicActions,
+      ...(restrictedActionsAvailableInAPI[api] || {}),
+    }
+    const boundActionCreators = bindActionCreators(
+      availableActions,
+      store.dispatch
+    )
     const doubleBoundActionCreators = doubleBind(
       boundActionCreators,
       api,
       plugin,
-      { ...args, parentSpan: pluginSpan }
+      { ...args, parentSpan: pluginSpan, activity }
     )
 
-    if (store.getState().program.prefixPaths) {
-      pathPrefix = store.getState().config.pathPrefix
-    }
+    const { config, program } = store.getState()
+
+    const pathPrefix = (program.prefixPaths && config.pathPrefix) || ``
+    const publicPath = getPublicPath({ ...config, ...program }, ``)
 
     const namespacedCreateNodeId = id => createNodeId(id, plugin.name)
 
@@ -138,7 +155,7 @@ const runAPI = (plugin, api, args) => {
             `),
             ]
 
-            const possiblyCodeFrame = getNonGatsbyCodeFrame()
+            const possiblyCodeFrame = getNonGatsbyCodeFrameFormatted()
             if (possiblyCodeFrame) {
               warning.push(possiblyCodeFrame)
             }
@@ -149,11 +166,13 @@ const runAPI = (plugin, api, args) => {
         },
       }
     }
+    let localReporter = getLocalReporter(activity, reporter)
 
     const apiCallArgs = [
       {
         ...args,
-        pathPrefix,
+        basePath: pathPrefix,
+        pathPrefix: publicPath,
         boundActionCreators: actions,
         actions,
         loadNodeContent,
@@ -164,7 +183,7 @@ const runAPI = (plugin, api, args) => {
         getNode,
         getNodesByType,
         hasNodeChanged,
-        reporter,
+        reporter: localReporter,
         getNodeAndSavePathDependency,
         cache,
         createNodeId: namespacedCreateNodeId,
@@ -175,6 +194,8 @@ const runAPI = (plugin, api, args) => {
           buildUnionType,
           buildInterfaceType,
           buildInputObjectType,
+          buildEnumType,
+          buildScalarType,
         },
       },
       plugin.pluginOptions,
@@ -213,14 +234,11 @@ const runAPI = (plugin, api, args) => {
   return null
 }
 
-let filteredPlugins
-const hasAPIFile = plugin => glob.sync(`${plugin.resolve}/gatsby-node*`)[0]
-
 let apisRunningById = new Map()
 let apisRunningByTraceId = new Map()
 let waitingForCasacadeToFinish = []
 
-module.exports = async (api, args = {}, pluginSource) =>
+module.exports = async (api, args = {}, { pluginSource, activity } = {}) =>
   new Promise(resolve => {
     const { parentSpan } = args
     const apiSpanArgs = parentSpan ? { childOf: parentSpan } : {}
@@ -231,34 +249,16 @@ module.exports = async (api, args = {}, pluginSource) =>
       apiSpan.setTag(key, value)
     })
 
-    // Check that the API is documented.
-    // "FAKE_API_CALL" is used when code needs to trigger something
-    // to happen once the the API queue is empty. Ideally of course
-    // we'd have an API (returning a promise) for that. But this
-    // works nicely in the meantime.
-    if (!apiList[api] && api !== `FAKE_API_CALL`) {
-      reporter.panic(`api: "${api}" is not a valid Gatsby api`)
-    }
-
-    const { store } = require(`../redux`)
     const plugins = store.getState().flattenedPlugins
-    // Get the list of plugins that implement gatsby-node
-    if (!filteredPlugins) {
-      filteredPlugins = plugins.filter(plugin => hasAPIFile(plugin))
-    }
 
-    // Break infinite loops.
-    // Sometimes a plugin will implement an API and call an
-    // action which will trigger the same API being called.
-    // "onCreatePage" is the only example right now.
-    // In these cases, we should avoid calling the originating plugin
-    // again.
-    let noSourcePluginPlugins = filteredPlugins
-    if (pluginSource) {
-      noSourcePluginPlugins = filteredPlugins.filter(
-        p => p.name !== pluginSource
-      )
-    }
+    // Get the list of plugins that implement this API.
+    // Also: Break infinite loops. Sometimes a plugin will implement an API and
+    // call an action which will trigger the same API being called.
+    // `onCreatePage` is the only example right now. In these cases, we should
+    // avoid calling the originating plugin again.
+    const implementingPlugins = plugins.filter(
+      plugin => plugin.nodeAPIs.includes(api) && plugin.name !== pluginSource
+    )
 
     const apiRunInstance = {
       api,
@@ -278,9 +278,7 @@ module.exports = async (api, args = {}, pluginSource) =>
     if (api === `setFieldsOnGraphQLNodeType`) {
       id = `${api}${apiRunInstance.startTime}${args.type.name}${args.traceId}`
     } else if (api === `onCreateNode`) {
-      id = `${api}${apiRunInstance.startTime}${
-        args.node.internal.contentDigest
-      }${args.traceId}`
+      id = `${api}${apiRunInstance.startTime}${args.node.internal.contentDigest}${args.traceId}`
     } else if (api === `preprocessSource`) {
       id = `${api}${apiRunInstance.startTime}${args.filename}${args.traceId}`
     } else if (api === `onCreatePage`) {
@@ -290,14 +288,16 @@ module.exports = async (api, args = {}, pluginSource) =>
       // `parentSpan` field that can be quite large. So we omit it
       // before calling stringify
       const argsJson = JSON.stringify(_.omit(args, `parentSpan`))
-      id = `${api}|${apiRunInstance.startTime}|${
-        apiRunInstance.traceId
-      }|${argsJson}`
+      id = `${api}|${apiRunInstance.startTime}|${apiRunInstance.traceId}|${argsJson}`
     }
     apiRunInstance.id = id
 
     if (args.waitForCascadingActions) {
       waitingForCasacadeToFinish.push(apiRunInstance)
+    }
+
+    if (apisRunningById.size === 0) {
+      emitter.emit(`API_RUNNING_START`)
     }
 
     apisRunningById.set(apiRunInstance.id, apiRunInstance)
@@ -323,23 +323,33 @@ module.exports = async (api, args = {}, pluginSource) =>
       }
     }
 
-    Promise.mapSeries(noSourcePluginPlugins, plugin => {
+    Promise.mapSeries(implementingPlugins, plugin => {
       if (stopQueuedApiRuns) {
         return null
       }
 
       let pluginName =
-        plugin.name === `default-site-plugin`
-          ? `gatsby-node.js`
-          : `Plugin ${plugin.name}`
+        plugin.name === `default-site-plugin` ? `gatsby-node.js` : plugin.name
 
       return new Promise(resolve => {
-        resolve(runAPI(plugin, api, { ...args, parentSpan: apiSpan }))
+        resolve(runAPI(plugin, api, { ...args, parentSpan: apiSpan }, activity))
       }).catch(err => {
         decorateEvent(`BUILD_PANIC`, {
           pluginName: `${plugin.name}@${plugin.version}`,
         })
-        reporter.panicOnBuild(`${pluginName} returned an error`, err)
+
+        let localReporter = getLocalReporter(activity, reporter)
+
+        localReporter.panicOnBuild({
+          id: `11321`,
+          context: {
+            pluginName,
+            api,
+            message: err instanceof Error ? err.message : err,
+          },
+          error: err instanceof Error ? err : undefined,
+        })
+
         return null
       })
     }).then(results => {
@@ -352,7 +362,6 @@ module.exports = async (api, args = {}, pluginSource) =>
       apisRunningByTraceId.set(apiRunInstance.traceId, currentCount - 1)
 
       if (apisRunningById.size === 0) {
-        const { emitter } = require(`../redux`)
         emitter.emit(`API_RUNNING_QUEUE_EMPTY`)
       }
 

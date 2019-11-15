@@ -141,6 +141,23 @@ describe(`gatsby-remark-code-repls`, () => {
         }
       })
 
+      it(`supports includeMatchingCSS`, () => {
+        const markdownAST = remark.parse(
+          `[](${protocol}path/to/nested/file.js)`
+        )
+        const runPlugin = () =>
+          plugin(
+            { markdownAST },
+            {
+              directory: `examples`,
+              codepen: {
+                includeMatchingCSS: true,
+              },
+            }
+          )
+        expect(runPlugin).not.toThrow()
+      })
+
       if (protocol === PROTOCOL_CODE_SANDBOX) {
         it(`supports custom html config option for index html`, () => {
           const markdownAST = remark.parse(
@@ -151,7 +168,9 @@ describe(`gatsby-remark-code-repls`, () => {
             { markdownAST },
             {
               directory: `examples`,
-              html: `<span id="foo"></span>`,
+              codesandbox: {
+                html: `<span id="foo"></span>`,
+              },
             }
           )
 
@@ -166,12 +185,14 @@ describe(`gatsby-remark-code-repls`, () => {
           const transformed = plugin(
             { markdownAST },
             {
-              dependencies: [
-                `react`,
-                `react-dom@next`,
-                `prop-types@15.5`,
-                `@babel/core@7.4.0`,
-              ],
+              codesandbox: {
+                dependencies: [
+                  `react`,
+                  `react-dom@next`,
+                  `prop-types@15.5`,
+                  `@babel/core@7.4.0`,
+                ],
+              },
               directory: `examples`,
             }
           )

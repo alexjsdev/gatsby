@@ -1,8 +1,8 @@
-import React, { Fragment } from "react"
+/** @jsx jsx */
+import { jsx } from "theme-ui"
+import { Fragment } from "react"
 
 import StickyResponsiveSidebar from "./sidebar/sticky-responsive-sidebar"
-import { breakpoints, dimensions } from "../utils/presets"
-import { rhythm } from "../utils/typography"
 
 export default props => {
   if (props.disable) {
@@ -11,20 +11,25 @@ export default props => {
     return (
       <Fragment>
         <div
-          css={{
-            [breakpoints.md]: {
-              paddingLeft: rhythm(dimensions.sidebarWidth.default),
-            },
-            [breakpoints.lg]: {
-              paddingLeft: rhythm(dimensions.sidebarWidth.large),
-            },
+          sx={{
+            pl: [
+              null,
+              null,
+              null,
+              t => t.sizes.sidebarWidth.default,
+              t => t.sizes.sidebarWidth.large,
+            ],
           }}
         >
           {props.renderContent()}
         </div>
         <StickyResponsiveSidebar
           enableScrollSync={props.enableScrollSync}
-          itemList={props.itemList}
+          itemList={props.itemList.items}
+          title={props.itemList.title}
+          sidebarKey={props.itemList.key}
+          disableExpandAll={props.itemList.disableExpandAll}
+          disableAccordions={props.itemList.disableAccordions}
           key={props.location.pathname}
           location={props.location}
         />

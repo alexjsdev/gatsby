@@ -1,48 +1,32 @@
-import React from "react"
+/** @jsx jsx */
+import { jsx } from "theme-ui"
 
 import ChevronSvg from "./chevron-svg"
-import {
-  colors,
-  transition,
-  scale,
-  letterSpacings,
-  fonts,
-  space,
-} from "../../utils/presets"
 import indention from "../../utils/sidebar/indention"
-import presets from "../../utils/sidebar/presets"
 
 const Chevron = ({ isExpanded }) => (
   <span
-    css={{
-      alignItems: `center`,
+    sx={{
       display: `flex`,
       flexShrink: 0,
-      marginLeft: `auto`,
+      ml: `auto`,
       height: `100%`,
       width: `100%`,
-      minHeight: presets.itemMinHeight,
-      minWidth: presets.itemMinHeight,
-      "&:before": {
-        ...styles.ulHorizontalDivider,
-        bottom: 0,
-        left: `0 !important`,
-        top: `auto`,
-      },
+      pt: `1.3em`,
+      minHeight: `sidebarItemMinHeight`,
+      minWidth: `sidebarItemMinHeight`,
       "&:hover": {
-        background: presets.activeSectionBackground,
+        backgroundColor: `sidebar.activeSectionBackground`,
       },
     }}
   >
     <ChevronSvg
       cssProps={{
-        color: isExpanded ? colors.gray.light : colors.gray.light,
-        marginLeft: `auto`,
-        marginRight: `auto`,
-        transform: isExpanded ? `rotateX(180deg)` : `rotateX(0deg)`,
-        transition: `transform ${transition.speed.fast} ${
-          transition.curve.default
-        }`,
+        color: `textMuted`,
+        mx: `auto`,
+        transform: isExpanded ? `rotate(180deg)` : `rotate(270deg)`,
+        transition: t =>
+          `transform ${t.transition.speed.fast} ${t.transition.curve.default}`,
       }}
     />
   </span>
@@ -53,22 +37,25 @@ const TitleButton = ({
   isExpanded,
   item,
   onSectionTitleClick,
-  title,
   uid,
 }) => (
   <button
     aria-expanded={isExpanded}
     aria-controls={uid}
-    css={{
+    sx={{
       ...styles.resetButton,
       ...styles.button,
-      paddingLeft: item.level === 0 ? space[6] : 0,
-      paddingRight: `0 !important`,
+      pl: item.level === 0 ? 6 : 0,
+      pr: `0 !important`,
       minHeight: 40,
       "&:before": {
-        ...styles.ulHorizontalDivider,
+        bg: `itemBorderColor`,
+        content: `''`,
+        height: 1,
+        position: `absolute`,
+        right: 0,
         bottom: 0,
-        left: item.level === 0 ? space[6] : 0,
+        left: t => (item.level === 0 ? t.space[6] : 0),
         top: `auto`,
       },
     }}
@@ -77,13 +64,13 @@ const TitleButton = ({
     <SectionTitle isExpanded={isExpanded} isActive={isActive} item={item}>
       {item.title}
       <span
-        css={{
+        sx={{
           position: `absolute`,
           top: 0,
           bottom: 0,
           right: 0,
-          minHeight: presets.itemMinHeight,
-          width: presets.itemMinHeight,
+          minHeight: `sidebarItemMinHeight`,
+          width: `sidebarItemMinHeight`,
         }}
       >
         <Chevron isExpanded={isExpanded} />
@@ -112,9 +99,11 @@ const SplitButton = ({
     }}
   >
     <span
-      css={{
+      sx={{
+        // borderRightWidth: "1px",
+        // borderRightStyle: "solid",
+        // borderRightColor: "sidebar.itemBorderColor"
         flexGrow: 1,
-        // borderRight: `1px solid ${presets.itemBorderColor}`,
       }}
     >
       {createLink({
@@ -125,16 +114,18 @@ const SplitButton = ({
         location,
         onLinkClick,
         level: item.level,
-        indention: indention(item.level),
-        customCSS: {
-          ...(item.level === 0 && {
-            "&&": {
-              ...styles.smallCaps,
-              color: isExpanded ? colors.gatsby : false,
-              fontWeight: isActive ? `bold` : `normal`,
-            },
-          }),
-          paddingRight: presets.itemMinHeight,
+        overrideCSS: {
+          ...(item.level === 0 &&
+            item.ui !== `steps` && {
+              "&&": {
+                ...styles.level0,
+                color:
+                  (isParentOfActiveItem && isExpanded) || isActive
+                    ? `link.color`
+                    : `navigation.linkDefault`,
+              },
+            }),
+          pr: t => t.sizes.sidebarItemMinHeight,
         },
       })}
     </span>
@@ -142,15 +133,15 @@ const SplitButton = ({
       aria-controls={uid}
       aria-expanded={isExpanded}
       aria-label={item.title + (isExpanded ? ` collapse` : ` expand`)}
-      css={{
+      sx={{
         ...styles.resetButton,
-        marginLeft: `auto`,
-        position: `absolute`,
-        top: 0,
         bottom: 0,
+        ml: `auto`,
+        minHeight: `sidebarItemMinHeight`,
+        position: `absolute`,
         right: 0,
-        minHeight: presets.itemMinHeight,
-        width: presets.itemMinHeight,
+        top: 0,
+        width: `sidebarItemMinHeight`,
         zIndex: 1,
       }}
       onClick={() => onSectionTitleClick(item)}
@@ -162,7 +153,7 @@ const SplitButton = ({
 
 const Title = ({ item, isActive, isExpanded }) => (
   <div
-    css={{
+    sx={{
       alignItems: `center`,
       display: `flex`,
       paddingLeft: indention(item.level),
@@ -182,16 +173,25 @@ const Title = ({ item, isActive, isExpanded }) => (
 
 const SectionTitle = ({ children, isExpanded, isActive, disabled, item }) => (
   <h3
-    css={{
+    sx={{
       alignItems: `center`,
       display: `flex`,
-      fontSize: scale[1],
-      fontWeight: isActive ? `bold` : `normal`,
+      fontSize: 1,
+      // fontFamily: "body",
+      // fontWeight: isActive ? `bold` : `body`,
+      fontWeight: `body`,
+      textTransform: `uppercase`,
+      letterSpacing: `tracked`,
       margin: 0,
-      ...(item.level === 0 && { ...styles.smallCaps }),
-      color: isExpanded ? colors.gatsby : false,
+      ...(item.level === 0 && { ...styles.level0 }),
+      color:
+        isExpanded && !disabled
+          ? `gatsby`
+          : disabled
+          ? `navigation.linkDefault`
+          : false,
       "&:hover": {
-        color: disabled ? false : colors.gatsby,
+        color: disabled ? false : `gatsby`,
       },
     }}
   >
@@ -213,18 +213,10 @@ const styles = {
     textAlign: `left`,
     width: `100%`,
   },
-  ulHorizontalDivider: {
-    background: presets.itemBorderColor,
-    top: 0,
-    content: `''`,
-    height: 1,
-    position: `absolute`,
-    right: 0,
-    left: 24,
-  },
-  smallCaps: {
-    fontFamily: fonts.header,
-    letterSpacing: letterSpacings.tracked,
+  level0: {
+    fontFamily: `header`,
+    letterSpacing: `tracked`,
     textTransform: `uppercase`,
+    fontSize: 1,
   },
 }

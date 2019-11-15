@@ -1,17 +1,15 @@
 const { interpret } = require(`xstate`)
 const machine = require(`../page-component`)
 
-jest.mock(`../../../internal-plugins/query-runner/query-watcher`)
-const {
-  runQueryForPage,
-} = require(`../../../internal-plugins/query-runner/query-watcher`)
+jest.mock(`../../../query`)
+const { enqueueExtractedQueryId, runQueuedQueries } = require(`../../../query`)
 
 const getService = (args = {}) =>
   interpret(
     machine.withContext({
       componentPath: `/a/path.js`,
       query: ``,
-      pages: [`/`],
+      pages: new Set([`/`]),
       isInBootstrap: true,
       ...args,
     })
@@ -21,7 +19,8 @@ const sleep = (delay = 50) => new Promise(resolve => setTimeout(resolve, delay))
 
 describe(`bootstrap`, () => {
   beforeEach(() => {
-    runQueryForPage.mockClear()
+    enqueueExtractedQueryId.mockClear()
+    runQueuedQueries.mockClear()
   })
 
   it(`handles not running queries during bootstrap`, () => {
@@ -58,7 +57,7 @@ describe(`bootstrap`, () => {
     service.send({ type: `NEW_PAGE_CREATED`, path: `/test` })
     // there is setTimeout in action handler for `NEW_PAGE_CREATED`
     await sleep()
-    expect(runQueryForPage).not.toBeCalled()
+    expect(runQueuedQueries).not.toBeCalled()
   })
 
   it(`will queue query when page if new page is created after bootstrap`, async () => {
@@ -67,6 +66,14 @@ describe(`bootstrap`, () => {
     service.send({ type: `NEW_PAGE_CREATED`, path })
     // there is setTimeout in action handler for `NEW_PAGE_CREATED`
     await sleep()
-    expect(runQueryForPage).toBeCalledWith(path)
+    expect(runQueuedQueries).toBeCalledWith(path)
+  })
+
+  it(`will queue query when page context is changed`, async () => {
+    const service = getService({ isInBootstrap: false })
+    service.send({ type: `PAGE_CONTEXT_MODIFIED`, path: `/a/test.md` })
+    // there is setTimeout in action handler for `CONTEXT_CHANGES`
+    await sleep()
+    expect(enqueueExtractedQueryId).toBeCalledWith(`/a/test.md`)
   })
 })

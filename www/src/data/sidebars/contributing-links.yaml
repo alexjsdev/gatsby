@@ -1,4 +1,5 @@
 - title: Contributing
+  key: contributing
   items:
     - title: Introduction
       link: /contributing/
@@ -11,8 +12,12 @@
           link: /contributing/contributor-swag/
         - title: Pair Programming Sessions
           link: /contributing/pair-programming/
+        - title: Gatsby Community Events
+          link: /contributing/events/
         - title: Where to Participate in the Community
           link: /contributing/where-to-participate/
+        - title: Organize a Gatsby Event
+          link: /contributing/organize-a-gatsby-event/
         - title: How to Run a Gatsby Workshop
           link: /contributing/how-to-run-a-gatsby-workshop/
         - title: How to Pitch Gatsby
@@ -21,6 +26,8 @@
       link: /contributing/code-of-conduct/
     - title: Gatsby Style Guide
       link: /contributing/gatsby-style-guide/
+    - title: Gatsby Docs Translation Guide
+      link: /contributing/gatsby-docs-translation-guide/
     - title: How to Contribute
       link: /contributing/how-to-contribute/
       items:
@@ -28,10 +35,14 @@
           link: /contributing/how-to-file-an-issue/
         - title: How to Make a Reproducible Test Case
           link: /contributing/how-to-make-a-reproducible-test-case/
+        - title: How to Open a Pull Request
+          link: /contributing/how-to-open-a-pull-request/
         - title: How to Label an Issue
           link: /contributing/how-to-label-an-issue/
         - title: Triaging GitHub Issues
           link: /contributing/triaging-github-issues/
+        - title: Managing Pull Requests
+          link: /contributing/managing-pull-requests/
         - title: Docs Contributions
           link: /contributing/docs-contributions/
           items:
@@ -47,6 +58,8 @@
           link: /contributing/code-contributions/
         - title: Setting Up Your Local Dev Environment
           link: /contributing/setting-up-your-local-dev-environment/
+        - title: Docs and Website Components
+          link: /contributing/docs-and-website-components/
         - title: Community Contributions
           link: /contributing/community-contributions/
           items:
@@ -58,6 +71,16 @@
               link: /contributing/submit-to-starter-library/
             - title: Submit to Plugin Library
               link: /contributing/submit-to-plugin-library/
+    - title: Gatsby Brand Guidelines
+      items:
+        - title: Color
+          link: /guidelines/color/
+        - title: Logo
+          link: /guidelines/logo/
+        - title: Typography
+          link: /guidelines/typography/
+        - title: Design Tokens
+          link: /guidelines/design-tokens/
     - title: RFC Process
       link: /contributing/rfc-process/
     - title: Gatsby's Governance Model*

@@ -2,7 +2,7 @@
 title: "How we tested prototypes for the new gatsbyjs.org homepage"
 date: 2019-03-11
 author: Shannon Soper
-tags: ["ux", "design"]
+tags: ["ux", "user-testing", "cutting-edge-experiences"]
 ---
 
 Our current [gatsbyjs.org](/) homepage is getting a bit long in the tooth -- our incredible designer @fk built it out a year and a half ago, but a lot has changed and we're getting ready to update it.
@@ -27,7 +27,7 @@ Back in November, we watched 8 people who had never heard of Gatsby before as th
 
 Two problems became clear as a result:
 
-- The first impression people have about Gatsby from above-the-fold and just below the fold on homepage is not accurate. Sources of more accurate understanding were the Github READme file and the diagram on homepage
+- The first impression people have about Gatsby from above-the-fold and just below the fold on homepage is not accurate. Sources of more accurate understanding were the GitHub README file and the diagram on homepage
 - We had not written down the following key facts about the .org site and therefore sometimes struggled to stay aligned in our answers to these questions:
   - Who is the audience for .org?
   - What are our value propositions for that audience?

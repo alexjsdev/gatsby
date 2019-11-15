@@ -24,7 +24,7 @@ After that, you'll find winning over [engineering leaders](/docs/winning-over-en
 
 Internet-adjacent organizations whose activities have been significantly affected by the web, including areas like travel, retail, consumer finance, media, and so on.
 
-[Digital presence is increasingly important](https://www.gatsbyjs.org/blog/2018-10-10-unbundling-of-the-cms) for these businesses, but they often don't often see themselves as software companies.
+[Digital presence is increasingly important](/blog/2018-10-10-unbundling-of-the-cms) for these businesses, but they often don't often see themselves as software companies.
 
 Because developers are often not the decision-makers around technologies in these businesses, bottoms-up adoption can be challenging.
 
@@ -32,4 +32,4 @@ If you're in an organization like this, it's important to:
 
 - strongly emphasize Gatsby's benefits in language familiar to [marketers](/docs/winning-over-marketers) and [executives](/docs/winning-over-executives).
 
-- position Gatsby as part of "digital transformation" initiatives your company undertakes. Faced with new competitors taking market share (eg Amazon in retail, Expedia and Airbnb in travel, PayPal in consumer finance), these businesses typically emphasize a priority as a company to be more Internet-native. This can provide an opening to pitch Gatsby as a way to do this.
+- position Gatsby as part of "digital transformation" initiatives your company undertakes. Faced with new competitors taking market share (e.g. Amazon in retail, Expedia and Airbnb in travel, PayPal in consumer finance), these businesses typically emphasize a priority as a company to be more Internet-native. This can provide an opening to pitch Gatsby as a way to do this.

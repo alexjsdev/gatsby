@@ -22,6 +22,9 @@ module.exports = Machine(
       NEW_PAGE_CREATED: {
         actions: `setPage`,
       },
+      PAGE_CONTEXT_MODIFIED: {
+        actions: `rerunPageQuery`,
+      },
       QUERY_EXTRACTION_GRAPHQL_ERROR: `queryExtractionGraphQLError`,
       QUERY_EXTRACTION_BABEL_ERROR: `queryExtractionBabelError`,
     },
@@ -76,14 +79,20 @@ module.exports = Machine(
       isNotBootstrapping: context => !context.isInBootstrap,
     },
     actions: {
-      runPageComponentQueries: (context, event) => {
-        const {
-          queueQueriesForPageComponent,
-        } = require(`../../internal-plugins/query-runner/query-watcher`)
+      rerunPageQuery: (_ctx, event) => {
+        const queryUtil = require(`../../query`)
         // Wait a bit as calling this function immediately triggers
         // an Action call which Redux squawks about.
         setTimeout(() => {
-          queueQueriesForPageComponent(context.componentPath)
+          queryUtil.enqueueExtractedQueryId(event.path)
+        }, 0)
+      },
+      runPageComponentQueries: (context, event) => {
+        const queryUtil = require(`../../query`)
+        // Wait a bit as calling this function immediately triggers
+        // an Action call which Redux squawks about.
+        setTimeout(() => {
+          queryUtil.enqueueExtractedPageComponent(context.componentPath)
         }, 0)
       },
       setQuery: assign({
@@ -98,25 +107,27 @@ module.exports = Machine(
       setPage: assign({
         pages: (ctx, event) => {
           if (event.path) {
-            const {
-              runQueryForPage,
-            } = require(`../../internal-plugins/query-runner/query-watcher`)
+            const queryUtil = require(`../../query`)
             // Wait a bit as calling this function immediately triggers
             // an Action call which Redux squawks about.
             setTimeout(() => {
               if (!ctx.isInBootstrap) {
-                runQueryForPage(event.path)
+                queryUtil.enqueueExtractedQueryId(event.path)
+                queryUtil.runQueuedQueries(event.path)
               }
             }, 0)
-
-            return ctx.pages.concat(event.path)
+            ctx.pages.add(event.path)
+            return ctx.pages
           } else {
             return ctx.pages
           }
         },
       }),
       deletePage: assign({
-        pages: (ctx, event) => ctx.pages.filter(p => p !== event.page.path),
+        pages: (ctx, event) => {
+          ctx.pages.delete(event.page.path)
+          return ctx.pages
+        },
       }),
       setBootstrapFinished: assign({
         isInBootstrap: false,

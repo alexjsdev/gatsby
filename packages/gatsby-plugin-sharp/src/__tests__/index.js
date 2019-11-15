@@ -17,9 +17,26 @@ const {
   fixed,
   queueImageResizing,
   getImageSize,
+  stats,
 } = require(`../`)
 const { scheduleJob } = require(`../scheduler`)
 scheduleJob.mockResolvedValue(Promise.resolve())
+
+jest.mock(`gatsby-cli/lib/reporter`, () => {
+  return {
+    log: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    activityTimer: () => {
+      return {
+        start: jest.fn(),
+        setStatus: jest.fn(),
+        end: jest.fn(),
+      }
+    },
+  }
+})
 
 describe(`gatsby-plugin-sharp`, () => {
   const args = {
@@ -114,28 +131,6 @@ describe(`gatsby-plugin-sharp`, () => {
 
       expect(path.parse(result.src).name).toBe(file.name)
       expect(path.parse(result.srcSet).name).toBe(file.name)
-    })
-
-    it(`accounts for pixel density`, async () => {
-      const result = await fluid({
-        file: getFileObject(path.join(__dirname, `images/144-density.png`)),
-        args: {
-          sizeByPixelDensity: true,
-        },
-      })
-
-      expect(result).toMatchSnapshot()
-    })
-
-    it(`can optionally ignore pixel density`, async () => {
-      const result = await fluid({
-        file: getFileObject(path.join(__dirname, `images/144-density.png`)),
-        args: {
-          sizeByPixelDensity: false,
-        },
-      })
-
-      expect(result).toMatchSnapshot()
     })
 
     it(`does not change the arguments object it is given`, async () => {
@@ -269,15 +264,8 @@ describe(`gatsby-plugin-sharp`, () => {
   })
 
   describe(`fixed`, () => {
-    beforeEach(() => {
-      console.warn = jest.fn()
-    })
-
-    afterAll(() => {
-      console.warn.mockClear()
-    })
-
     it(`does not warn when the requested width is equal to the image width`, async () => {
+      console.warn = jest.fn()
       const args = { width: 1 }
 
       const result = await fixed({
@@ -287,9 +275,11 @@ describe(`gatsby-plugin-sharp`, () => {
 
       expect(result.width).toEqual(1)
       expect(console.warn).toHaveBeenCalledTimes(0)
+      console.warn.mockClear()
     })
 
     it(`warns when the requested width is greater than the image width`, async () => {
+      console.warn = jest.fn()
       const { width } = await sharp(file.absolutePath).metadata()
       const args = { width: width * 2 }
 
@@ -300,6 +290,7 @@ describe(`gatsby-plugin-sharp`, () => {
 
       expect(result.width).toEqual(width)
       expect(console.warn).toHaveBeenCalledTimes(1)
+      console.warn.mockClear()
     })
 
     it(`correctly infers the width when only the height is given`, async () => {
@@ -381,6 +372,39 @@ describe(`gatsby-plugin-sharp`, () => {
       })
 
       expect(fluidSvg).toMatchSnapshot()
+    })
+  })
+
+  describe(`duotone`, () => {
+    const args = {
+      maxWidth: 100,
+      width: 100,
+      duotone: { highlight: `#ffffff`, shadow: `#cccccc`, opacity: 50 },
+    }
+
+    it(`fixed`, async () => {
+      let result = await fixed({ file, args })
+      expect(result).toMatchSnapshot()
+    })
+
+    it(`fluid`, async () => {
+      let result = await fluid({ file, args })
+      expect(result).toMatchSnapshot()
+    })
+  })
+
+  describe(`stats`, () => {
+    it(`determines if the image is transparent, based on the presence and use of alpha channel`, async () => {
+      const result = await stats({ file, args })
+      expect(result).toMatchSnapshot()
+      expect(result.isTransparent).toEqual(false)
+
+      const alphaResult = await stats({
+        file: getFileObject(path.join(__dirname, `images/alphatest.png`)),
+        args,
+      })
+      expect(alphaResult).toMatchSnapshot()
+      expect(alphaResult.isTransparent).toEqual(true)
     })
   })
 })

@@ -26,7 +26,7 @@ For this guide, you don't have to worry about most of the features. You'll just 
 
 #### Adding content to existing pages
 
-Now that you have some content to pull, you can create a basic Gatsby site to display the content. Assuming you have the [Gatsby CLI installed](https://www.gatsbyjs.org/docs/quick-start/#install-gatsbys-command-line-tool), create a new site and navigate to it in your terminal:
+Now that you have some content to pull, you can create a basic Gatsby site to display the content. Assuming you have the [Gatsby CLI installed](/docs/quick-start/#install-gatsbys-command-line-tool), create a new site and navigate to it in your terminal:
 
 ```shell
 gatsby new kentico-cloud-guide
@@ -53,8 +53,9 @@ module.exports = {
           deliveryClientConfig: {
             projectId: `<YourProjectID>` // Fill in your Project ID
           },
+          // Please note that with the Sample Project generated above, `en-US` is the default language for the project and this config. For a blank project, this needs to be `default`.
           languageCodenames: [
-                    `en-US` // Or whatever languages you have installed in your project (Project settings -> Localization)
+                    `en-US` // Or the languages in your project (Project settings -> Localization)
           ]
       }
     },
@@ -67,9 +68,9 @@ And that's enough for you to be able to access content from Kentico Cloud in you
 gatsby develop
 ```
 
-To see all the content that's available from Kentico Cloud, you can test out GraphQL queries in GraphiQL at `http://localhost:8000/___graphql`. Nodes from Kentico Cloud will be prefixed with `kenticoCloud` (for single nodes) or `allKenticoCloud` (for all examples of a given type). Then each node has `Item` or `Type`, depending on what it is, and lastly you can add the codename of a specific type you are looking for. Feel free to explore the responses in GraphiQL.
+To see all the content that's available from Kentico Cloud, you can test out GraphQL queries in GraphiQL at <http://localhost:8000/___graphql>. Nodes from Kentico Cloud will be prefixed with `kenticoCloud` (for single nodes) or `allKenticoCloud` (for all examples of a given type). Then each node has `Item` or `Type`, depending on what it is, and lastly you can add the codename of a specific type you are looking for. Feel free to explore the responses in GraphiQL.
 
-To see how to put that data into your site, first go to `http://localhost:8000/`. Notice that the default title for the site is "Gatsby Default Starter". You can change that by pulling the title for your site from Kentico Cloud.
+To see how to put that data into your site, first go to <http://localhost:8000/>. Notice that the default title for the site is "Gatsby Default Starter". You can change that by pulling the title for your site from Kentico Cloud.
 
 The title here is generated in the layout from the site metadata. By default, the Kentico Cloud Sample Project has a single item named "Home" that is the only item of the Home type. So you can change the layout component to query the metadata of that item and then use that data to populate your title.
 
@@ -94,7 +95,7 @@ const Layout = ({ children }) => (
 ...
 ```
 
-If you look at `http://localhost:8000/`, you'll notice the title is now "Dancing Goat–Freshest coffee on the block!". You can easily change this title in Kentico Cloud to whatever you want and rerun `gatsby develop` to rebuild the site ([see below about automatic builds](#continuous-deployment)).
+If you look at <http://localhost:8000/>, you'll notice the title is now "Dancing Goat–Freshest coffee on the block!". You can easily change this title in Kentico Cloud to whatever you want and rerun `gatsby develop` to rebuild the site ([see below about automatic builds](#continuous-deployment)).
 
 So you've seen how to add content to existing pages in Gatsby using Kentico Cloud. Next, you will start creating new pages of your own.
 
@@ -119,41 +120,49 @@ exports.onCreateNode = ({ node, actions: { createNodeField } }) => {
 Now that you have a pretty way to define the path for your pages, you can create the pages programmatically:
 
 ```javascript:title=gatsby-node.js
-const path = require(`path`);
+const path = require(`path`) // highlight-line
 
-exports.onCreateNode ... // As above
+exports.onCreateNode = ({ node, actions: { createNodeField } }) => {
+  if (node.internal.type === `KenticoCloudItemArticle`) {
+    createNodeField({
+      node,
+      name: `slug`,
+      value: node.elements.url_pattern.value,
+    })
+  }
+}
 
-exports.createPages = ({ graphql, actions }) => {
-    const { createPage } = actions;
+// highlight-start
+exports.createPages = async ({ graphql, actions }) => {
+  const { createPage } = actions
 
-    return new Promise((resolve, reject) => {
-      graphql(`
-      {
-        allKenticoCloudItemArticle {
-          edges {
-            node {
-              fields {
-                slug
-              }
+  // Query data from Kentico
+  const result = await graphql(`
+    {
+      allKenticoCloudItemArticle {
+        edges {
+          node {
+            fields {
+              slug
             }
           }
         }
       }
-      `).then(result => {
-        result.data.allKenticoCloudItemArticle.edges.forEach(({ node }) => {
-            console.log(node.fields.slug);
-            createPage({
-                path: node.fields.slug,
-                component: path.resolve(`src/templates/article.js`),
-                context: {
-                    slug: node.fields.slug,
-                }
-            })
-        });
-        resolve();
-    });
-  });
+    }
+  `)
+
+  // Create pages
+  result.data.allKenticoCloudItemArticle.edges.forEach(({ node }) => {
+    createPage({
+      path: node.fields.slug,
+      component: path.resolve(`src/templates/article.js`),
+      context: {
+        slug: node.fields.slug,
+      },
+    })
+  })
 }
+// highlight-end
 ```
 
 Now create a basic template to display each article with a title and the body that you pull with a GraphQL query:
@@ -196,7 +205,7 @@ export const query = graphql`
 `
 ```
 
-When you rerun `gatsby develop`, you'll be able to see each article as a page with content pulled from Kentico Cloud. To see a list of all pages, visit `http://localhost:8000/asdf` (or any other url that generates a 404).
+When you rerun `gatsby develop`, you'll be able to see each article as a page with content pulled from Kentico Cloud. To see a list of all pages, visit <http://localhost:8000/asdf> (or any other url that generates a 404).
 
 The body copy for this article comes from a rich text element in Kentico Cloud. Links and inline linked items (e.g., embedded videos) are not resolved by default for rich text elements. If you want to resolve them, you can use the [embedded JS SDK resolution](https://github.com/Kentico/gatsby-source-kentico-cloud#embedded-js-sdk-resolution) or query the required data in structured form for resolution and create your own React components for [inline content items](https://github.com/Kentico/gatsby-source-kentico-cloud#content-items-in-rich-text-elements), [links](https://github.com/Kentico/gatsby-source-kentico-cloud#links-in-rich-text-elements), and [images](https://github.com/Kentico/gatsby-source-kentico-cloud#images-in-rich-text-elements).
 
@@ -217,4 +226,4 @@ You've seen how to set up a simple Gatsby site that sources content from Kentico
 - See [more about what the Kentico Cloud source plugin can do](https://github.com/Kentico/gatsby-source-kentico-cloud#features).
 - Read the [Kentico Cloud documentation](https://developer.kenticocloud.com/docs) to see what's possible.
 - Explore the [Kentico Cloud Gatsby starter](https://github.com/Kentico/gatsby-starter-kentico-cloud) to see a more complete example.
-- Read a [blog post about using Kentico Cloud and Gatsby](https://www.gatsbyjs.org/blog/2018-12-19-kentico-cloud-and-gatsby-take-you-beyond-static-websites/).
+- Read a [blog post about using Kentico Cloud and Gatsby](/blog/2018-12-19-kentico-cloud-and-gatsby-take-you-beyond-static-websites/).

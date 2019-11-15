@@ -1,11 +1,13 @@
-const { createHash } = require(`crypto`)
-const uuid = require(`uuid/v1`)
+const uuidv4 = require(`uuid/v4`)
 const EventStorage = require(`./event-storage`)
-const sanitizeError = require(`./sanitize-error`)
-const ci = require(`ci-info`)
+const { cleanPaths } = require(`./error-helpers`)
+const { isCI, getCIName } = require(`gatsby-core-utils`)
 const os = require(`os`)
-const { basename } = require(`path`)
-const { execSync } = require(`child_process`)
+const { join, sep } = require(`path`)
+const isDocker = require(`is-docker`)
+const showAnalyticsNotification = require(`./showAnalyticsNotification`)
+const lodash = require(`lodash`)
+const { getRepositoryId } = require(`./repository-id`)
 
 module.exports = class AnalyticsTracker {
   store = new EventStorage()
@@ -15,47 +17,115 @@ module.exports = class AnalyticsTracker {
   osInfo // lazy
   trackingEnabled // lazy
   componentVersion
-  sessionId = uuid()
+  sessionId = this.getSessionId()
+
   constructor() {
     try {
+      if (this.store.isTrackingDisabled()) {
+        this.trackingEnabled = false
+      }
+
+      this.defaultTags = this.getTagsFromEnv()
+
+      // These may throw and should be last
       this.componentVersion = require(`../package.json`).version
+      this.gatsbyCliVersion = this.getGatsbyCliVersion()
+      this.installedGatsbyVersion = this.getGatsbyVersion()
     } catch (e) {
       // ignore
     }
   }
 
-  captureEvent(type = ``, tags = {}) {
+  // We might have two instances of this lib loaded, one from globally installed gatsby-cli and one from local gatsby.
+  // Hence we need to use process level globals that are not scoped to this module
+  getSessionId() {
+    return (
+      process.gatsbyTelemetrySessionId ||
+      (process.gatsbyTelemetrySessionId = uuidv4())
+    )
+  }
+
+  getTagsFromEnv() {
+    if (process.env.GATSBY_TELEMETRY_TAGS) {
+      try {
+        return JSON.parse(process.env.GATSBY_TELEMETRY_TAGS)
+      } catch (_) {
+        // ignore
+      }
+    }
+    return {}
+  }
+
+  getGatsbyVersion() {
+    const packageInfo = require(join(
+      process.cwd(),
+      `node_modules`,
+      `gatsby`,
+      `package.json`
+    ))
+    try {
+      return packageInfo.version
+    } catch (e) {
+      // ignore
+    }
+    return undefined
+  }
+
+  getGatsbyCliVersion() {
+    try {
+      const jsonfile = join(
+        require
+          .resolve(`gatsby-cli`) // Resolve where current gatsby-cli would be loaded from.
+          .split(sep)
+          .slice(0, -2) // drop lib/index.js
+          .join(sep),
+        `package.json`
+      )
+      const { version } = require(jsonfile).version
+      return version
+    } catch (e) {
+      // ignore
+    }
+    return undefined
+  }
+  captureEvent(type = ``, tags = {}, opts = { debounce: false }) {
     if (!this.isTrackingEnabled()) {
       return
     }
-    if (Array.isArray(type) && type.length > 2) {
-      type = type[2].toUpperCase()
+    let baseEventType = `CLI_COMMAND`
+    if (Array.isArray(type)) {
+      type = type.length > 2 ? type[2].toUpperCase() : ``
+      baseEventType = `CLI_RAW_COMMAND`
     }
+
     const decoration = this.metadataCache[type]
+    const eventType = `${baseEventType}_${type}`
+
+    if (opts.debounce) {
+      const debounceTime = 5 * 1000
+      const now = Date.now()
+      const debounceKey = JSON.stringify({ type, decoration, tags })
+      const last = this.debouncer[debounceKey] || 0
+      if (now - last < debounceTime) {
+        return
+      }
+      this.debouncer[debounceKey] = now
+    }
+
     delete this.metadataCache[type]
-    const eventType = `CLI_COMMAND_${type}`
-    this.buildAndStoreEvent(eventType, Object.assign(tags, decoration))
+    this.buildAndStoreEvent(eventType, lodash.merge({}, tags, decoration))
   }
 
   captureError(type, tags = {}) {
     if (!this.isTrackingEnabled()) {
       return
     }
+
     const decoration = this.metadataCache[type]
     delete this.metadataCache[type]
     const eventType = `CLI_ERROR_${type}`
-    sanitizeError(tags)
 
-    // JSON.stringify won't work for Errors w/o some trickery:
-    let { error } = tags
-    if (error) {
-      error = error.map(e =>
-        JSON.parse(JSON.stringify(e, Object.getOwnPropertyNames(e)))
-      )
-    }
-    tags.error = JSON.stringify(error)
-
-    this.buildAndStoreEvent(eventType, Object.assign(tags, decoration))
+    this.formatErrorAndStoreEvent(eventType, lodash.merge({}, tags, decoration))
   }
 
   captureBuildError(type, tags = {}) {
@@ -65,24 +135,54 @@ module.exports = class AnalyticsTracker {
     const decoration = this.metadataCache[type]
     delete this.metadataCache[type]
     const eventType = `BUILD_ERROR_${type}`
-    sanitizeError(tags)
-    tags.error = JSON.stringify(tags.error)
 
-    this.buildAndStoreEvent(eventType, Object.assign(tags, decoration))
+    this.formatErrorAndStoreEvent(eventType, lodash.merge({}, tags, decoration))
+  }
+
+  formatErrorAndStoreEvent(eventType, tags) {
+    if (tags.error) {
+      // `error` ought to have been `errors` but is `error` in the database
+      if (Array.isArray(tags.error)) {
+        const { error, ...restOfTags } = tags
+        error.forEach(err => {
+          this.formatErrorAndStoreEvent(eventType, {
+            error: err,
+            ...restOfTags,
+          })
+        })
+        return
+      }
+
+      tags.errorV2 = {
+        // errorCode field was changed from `id` to `code`
+        id: tags.error.code || tags.error.id,
+        text: cleanPaths(tags.error.text),
+        level: tags.error.level,
+        type: tags.error?.type,
+        // see if we need empty string or can just use NULL
+        stack: cleanPaths(tags.error?.error?.stack || ``),
+        context: cleanPaths(JSON.stringify(tags.error?.context)),
+      }
+
+      delete tags.error
+    }
+
+    this.buildAndStoreEvent(eventType, tags)
   }
 
   buildAndStoreEvent(eventType, tags) {
     const event = {
-      ...this.defaultTags,
-      ...tags, // The schema must include these
+      installedGatsbyVersion: this.installedGatsbyVersion,
+      gatsbyCliVersion: this.gatsbyCliVersion,
+      ...lodash.merge({}, this.defaultTags, tags), // The schema must include these
       eventType,
       sessionId: this.sessionId,
       time: new Date(),
       machineId: this.getMachineId(),
-      repositoryId: this.getRepoId(),
       componentId: `gatsby-cli`,
       osInformation: this.getOsInfo(),
       componentVersion: this.componentVersion,
+      ...getRepositoryId(),
     }
     this.store.addEvent(event)
   }
@@ -94,7 +194,7 @@ module.exports = class AnalyticsTracker {
     }
     let machineId = this.store.getConfig(`telemetry.machineId`)
     if (!machineId) {
-      machineId = uuid()
+      machineId = uuidv4()
       this.store.updateConfig(`telemetry.machineId`, machineId)
     }
     this.machineId = machineId
@@ -108,35 +208,14 @@ module.exports = class AnalyticsTracker {
     }
     let enabled = this.store.getConfig(`telemetry.enabled`)
     if (enabled === undefined || enabled === null) {
-      console.log(
-        `Gatsby has started collecting anonymous usage analytics to help improve Gatsby for all users.\n` +
-          `If you'd like to opt-out, you can use \`gatsby telemetry --disable\`\n` +
-          `To learn more, checkout http://gatsby.dev/telemetry`
-      )
+      if (!isCI()) {
+        showAnalyticsNotification()
+      }
       enabled = true
       this.store.updateConfig(`telemetry.enabled`, enabled)
     }
     this.trackingEnabled = enabled
     return enabled
-  }
-
-  getRepoId() {
-    // we may live multiple levels in git repo
-    let prefix = `pwd:`
-    let repo = basename(process.cwd())
-    try {
-      const originBuffer = execSync(
-        `git config --local --get remote.origin.url`,
-        { timeout: 1000, stdio: `pipe` }
-      )
-      repo = String(originBuffer).trim()
-      prefix = `git:`
-    } catch (e) {
-      // ignore
-    }
-    const hash = createHash(`sha256`)
-    hash.update(repo)
-    return prefix + hash.digest(`hex`)
   }
 
   getOsInfo() {
@@ -148,10 +227,11 @@ module.exports = class AnalyticsTracker {
       nodeVersion: process.version,
       platform: os.platform(),
       release: os.release(),
-      cpus: cpus && cpus.length > 0 && cpus[0].model,
+      cpus: (cpus && cpus.length > 0 && cpus[0].model) || undefined,
       arch: os.arch(),
-      ci: ci.isCI,
-      ciName: (ci.isCI && ci.name) || undefined,
+      ci: isCI(),
+      ciName: getCIName(),
+      docker: isDocker(),
     }
     this.osInfo = osInfo
     return osInfo

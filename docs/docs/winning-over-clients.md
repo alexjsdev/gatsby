@@ -1,5 +1,6 @@
 ---
 title: Winning Over Clients
+issue: https://github.com/gatsbyjs/gatsby/issues/14040
 ---
 
 The top priority of most clients is that the website is shipped to their standard of quality, on time, and under budget.
@@ -13,7 +14,7 @@ Some benefits that you can use to pitch Gatsby to clients include:
 - Ease of making development changes helps keep project under budget
 - Lower hosting cost helps keep project under budget
 
-[This one-pager](https://www.gatsbyjs.org/gatsby-one-pager.pdf) may also be useful for clients -- it explains Gatsby in their language.
+[This one-pager](/gatsby-one-pager.pdf) may also be useful for clients -- it explains Gatsby in their language.
 
 --
 
